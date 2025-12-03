@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 // loadAPIKey tries to get the API key from the environment first.
@@ -36,7 +37,19 @@ func loadAPIKey() string {
 	return ""
 }
 
+// Initialize loads environment variables from a .env file when present.
+// It intentionally does not fail the process when .env is missing so deployments
+// on platforms like Render (which use real environment variables) won't error.
+func Initialize() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, relying on environment variables")
+	}
+}
+
 func main() {
+	// try to load .env (non-fatal) so local development can rely on .env while
+	// production (Render) uses actual environment variables
+	Initialize()
 	// デフォルトルータを初期化
 	router := gin.Default()
 
@@ -105,5 +118,9 @@ func main() {
 	})
 
 	// サーバーの起動
-	router.Run("localhost:8080") // 0.0.0.0:8080 でサーバーを立てます。
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080" // ローカル開発用
+	}
+	router.Run(":" + port)
 }
