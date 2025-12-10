@@ -76,7 +76,7 @@ type RecommendedBook struct {
 }
 
 // GetRecommendedBooks は Gemini API を使用してユーザーのマイライブラリに基づいて、
-// 3つのおすすめ書籍を取得する
+// 5つのおすすめ書籍を取得する
 func GetRecommendedBooks(ctx context.Context, library LibraryRequest, geminiKey string) ([]RecommendedBook, error) {
 	// ユーザーのマイライブラリ情報をプロンプトに組み込む
 	libraryInfo := "ユーザーのマイライブラリ:\n"
@@ -106,7 +106,7 @@ func GetRecommendedBooks(ctx context.Context, library LibraryRequest, geminiKey 
 
 注意:
 1. JSON配列のみを返す
-2. 正確に3冊のみを返す
+2. 正確に5冊のみを返す
 3. マイライブラリに既に存在する書籍は避ける
 4. 実在する書籍と著者を提案する`
 
