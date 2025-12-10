@@ -1,11 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -15,11 +14,12 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// loadAPIKey tries to get the API key from the environment first.
-// If not present, it will attempt to read a local .env file in the working directory
-// and parse a line starting with `GOOGLE_BOOKS_API_KEY=`. Returns empty string on failure.
-func loadAPIKey() string {
-	if k := os.Getenv("GOOGLE_BOOKS_API_KEY"); k != "" {
+// loadAPIKeyFromEnv は環境変数またはワーキングディレクトリの .env ファイルから
+// 指定されたキーの値を取得する。
+// keyName: 環境変数名またはプレフィックス（例：GOOGLE_BOOKS_API_KEY, GEMINI_API_KEY）
+// 取得できない場合は空文字列を返す。
+func loadAPIKeyFromEnv(keyName string) string {
+	if k := os.Getenv(keyName); k != "" {
 		return k
 	}
 
@@ -28,28 +28,57 @@ func loadAPIKey() string {
 		return ""
 	}
 
+	prefix := keyName + "="
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "GOOGLE_BOOKS_API_KEY=") {
-			return strings.TrimPrefix(line, "GOOGLE_BOOKS_API_KEY=")
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimPrefix(line, prefix)
 		}
 	}
 	return ""
 }
 
-// Initialize loads environment variables from a .env file when present.
-// It intentionally does not fail the process when .env is missing so deployments
-// on platforms like Render (which use real environment variables) won't error.
+// Initialize は .env ファイルが存在する場合、そこから環境変数を読み込む。
+// ローカル開発では .env を使用し、本番環境（Render など）では
+// 実際の環境変数を使用するため、.env が見つからない場合はエラーにしない。
 func Initialize() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, relying on environment variables")
+		log.Println(".env ファイルが見つかりません。環境変数を使用します")
 	}
 }
 
+// APIキーを保持するグローバル変数
+var (
+	googleBooksAPIKey string
+	geminiAPIKey      string
+)
+
+// initializeAPIKeys はアプリケーション起動時に全ての API キーを読み込む
+func initializeAPIKeys() error {
+	googleBooksAPIKey = loadAPIKeyFromEnv("GOOGLE_BOOKS_API_KEY")
+	if googleBooksAPIKey == "" {
+		return fmt.Errorf("google Books API キーが設定されていません")
+	}
+
+	geminiAPIKey = loadAPIKeyFromEnv("GEMINI_API_KEY")
+	if geminiAPIKey == "" {
+		return fmt.Errorf("gemini API キーが設定されていません")
+	}
+
+	log.Println("API キーの読み込みに成功しました")
+	return nil
+}
+
 func main() {
-	// try to load .env (non-fatal) so local development can rely on .env while
-	// production (Render) uses actual environment variables
+	// .env ファイルの読み込みを試行（エラーは許容）
+	// ローカル開発は .env を、本番環境（Render）は実際の環境変数を使用
 	Initialize()
+
+	// API キーを初期化
+	if err := initializeAPIKeys(); err != nil {
+		log.Fatalf("API キーの初期化に失敗しました: %v", err)
+	}
+
 	// デフォルトルータを初期化
 	router := gin.Default()
 
@@ -64,63 +93,110 @@ func main() {
 	}))
 
 	// /books エンドポイント: searchQuery と maxResults をクエリパラメータで受け取り、
-	// Google Books API を叩いて得たレスポンスをそのまま返す
+	// Google Books API を叩いて得たレスポンスを返す
 	router.GET("/books", func(c *gin.Context) {
+		// クエリパラメータから検索キーワードと取得数を取得
 		searchQuery := c.Query("searchQuery")
 		maxResults := c.Query("maxResults")
 
 		if searchQuery == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "missing searchQuery parameter"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "searchQuery パラメータが指定されていません"})
 			return
 		}
 
 		if maxResults == "" {
-			maxResults = "20" // デフォルト
+			maxResults = "20" // デフォルト値
 		}
 
-		apiKey := loadAPIKey()
-		if apiKey == "" {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "API key not configured"})
-			return
-		}
-
-		// 組み立てとエンコード
-		q := url.QueryEscape(searchQuery)
-		key := url.QueryEscape(apiKey)
-		// maxResults は整数であることが期待されるが、ここでは呼び出し側に任せる
-		target := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=%s&key=%s", q, maxResults, key)
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		req, err := http.NewRequest("GET", target, nil)
+		// Google Books API で書籍を検索
+		books, err := FetchBooksByQuery(searchQuery, maxResults, googleBooksAPIKey)
 		if err != nil {
-			log.Printf("failed to create request: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create request"})
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
 
-		resp, err := client.Do(req)
+		// 取得した書籍情報を JSON で返す
+		c.JSON(http.StatusOK, gin.H{"items": books})
+	})
+
+	// /recommends エンドポイント: ユーザーのマイライブラリをもとに
+	// Gemini API でおすすめ書籍 3 冊を取得し、Google Books API で詳細情報を返す
+	router.POST("/recommends", func(c *gin.Context) {
+		// リクエストボディからマイライブラリを取得
+		var req LibraryRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "リクエストボディが不正です"})
+			return
+		}
+
+		if len(req.Records) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "マイライブラリが空です"})
+			return
+		}
+
+		// Gemini API を使用して、ユーザーの読書傾向に基づくおすすめ書籍を取得
+		ctx := context.Background()
+
+		recommendations, err := GetRecommendedBooks(ctx, req, geminiAPIKey)
 		if err != nil {
-			log.Printf("request error: %v", err)
-			c.JSON(http.StatusBadGateway, gin.H{"error": "failed to call external API"})
+			log.Printf("おすすめ書籍取得エラー: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		defer resp.Body.Close()
 
-		body, err := io.ReadAll(resp.Body)
+		// 各おすすめ書籍について Google Books API から詳細情報を取得
+		var results []BookInfo
+		for _, rec := range recommendations {
+			// タイトルと著者で検索クエリを構築
+			// 形式: intitle:タイトル+inauthor:著者名
+			searchQuery := "intitle:" + rec.Title + "+inauthor:" + rec.Author
+			books, err := FetchBooksByQuery(searchQuery, "1", googleBooksAPIKey)
+			if err != nil {
+				log.Printf("書籍情報取得エラー『%s』: %v", rec.Title, err)
+				continue
+			}
+			if len(books) > 0 {
+				results = append(results, books[0])
+			}
+		}
+
+		// 取得したおすすめ書籍の詳細情報を JSON で返す
+		c.JSON(http.StatusOK, gin.H{"items": results})
+	})
+
+	// /summary エンドポイント: ユーザーのマイライブラリから読書傾向を分析し、
+	// 要約と行動提案をテキストとして返す
+	router.POST("/summary", func(c *gin.Context) {
+		// リクエストボディからマイライブラリを取得
+		var req LibraryRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "リクエストボディが不正です"})
+			return
+		}
+
+		if len(req.Records) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "マイライブラリが空です"})
+			return
+		}
+
+		// Gemini API を使用して読書傾向を分析
+		ctx := context.Background()
+		summary, err := GetReadingSummary(ctx, req, geminiAPIKey)
 		if err != nil {
-			log.Printf("read body error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read response"})
+			log.Printf("読書傾向要約生成エラー: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 
-		// 受け取ったJSONをそのまま返す
-		c.Data(resp.StatusCode, "application/json; charset=utf-8", body)
+		// テキスト形式でそのままコピペできるように返す
+		c.JSON(http.StatusOK, gin.H{"summary": summary})
 	})
 
 	// サーバーの起動
+	// PORT 環境変数が設定されていればそれを使用、なければデフォルト 8080 ポートで起動
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080" // ローカル開発用
+		port = "8080" // ローカル開発用デフォルトポート
 	}
 	router.Run(":" + port)
 }
