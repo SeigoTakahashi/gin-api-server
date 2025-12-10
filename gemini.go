@@ -217,6 +217,8 @@ func GetReadingSummary(ctx context.Context, library LibraryRequest, geminiKey st
 
 3. 【行動提案】
    - 読書習慣の改善提案
+   - 新しいジャンルや著者の提案
+   - 効率的な読書方法の提案
 
 返すときは、上記の構成を維持したテキストで、数字や記号は最小限にしてください。`
 
