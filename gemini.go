@@ -93,10 +93,12 @@ func GetRecommendedBooks(ctx context.Context, library LibraryRequest, geminiKey 
 
 	// Gemini API に送信するプロンプト
 	prompt := libraryInfo + `
-上記のマイライブラリに基づいて、ユーザーに合いそうなおすすめ書籍を「正確に3冊」提案してください。
+上記のマイライブラリに基づいて、ユーザーに合いそうなおすすめ書籍を「正確に5冊」提案してください。
 レスポンスは以下の JSON 形式でのみ返してください。他のテキストは一切含めないでください。
 
 [
+  {"title": "書籍タイトル", "author": "著者名"},
+  {"title": "書籍タイトル", "author": "著者名"},
   {"title": "書籍タイトル", "author": "著者名"},
   {"title": "書籍タイトル", "author": "著者名"},
   {"title": "書籍タイトル", "author": "著者名"}
