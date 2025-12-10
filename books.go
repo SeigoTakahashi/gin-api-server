@@ -44,11 +44,11 @@ type GoogleBooksResponse struct {
 	} `json:"items"`
 }
 
-// FetchBooksByQuery は Google Books API で書籍を検索し、整形された書籍情報を返す
+// FetchBooksByQuery は Google Books API で書籍を検索し、API レスポンスをそのまま返す
 // searchQuery: 検索クエリ（例: "intitle:こころ+inauthor:夏目漱石"）
 // maxResults: 取得する書籍数の上限
 // apiKey: Google Books API キー
-func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string) ([]BookInfo, error) {
+func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string) (*GoogleBooksResponse, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("APIキーが設定されていません")
 	}
@@ -89,38 +89,5 @@ func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string) ([]
 		return nil, fmt.Errorf("レスポンスのパースに失敗しました")
 	}
 
-	var results []BookInfo
-	for _, item := range booksResp.Items {
-		volumeInfo := item.VolumeInfo
-
-		// 著者情報を抽出（複数存在する場合は最初の1つを使用）
-		authors := ""
-		if len(volumeInfo.Authors) > 0 {
-			authors = volumeInfo.Authors[0]
-		}
-
-		// ISBN を抽出（ISBN_13 または ISBN_10）
-		isbn := ""
-		for _, id := range volumeInfo.IndustryIdentifiers {
-			if id.Type == "ISBN_13" || id.Type == "ISBN_10" {
-				isbn = id.Identifier
-				break
-			}
-		}
-
-		// 書籍情報を構築
-		book := BookInfo{
-			Title:         volumeInfo.Title,
-			Author:        authors,
-			Thumbnail:     volumeInfo.ImageLinks.Thumbnail,
-			Publisher:     volumeInfo.Publisher,
-			PublishedDate: volumeInfo.PublishedDate,
-			Description:   volumeInfo.Description,
-			Pages:         fmt.Sprintf("%d", volumeInfo.PageCount),
-			ISBN:          isbn,
-		}
-		results = append(results, book)
-	}
-
-	return results, nil
+	return &booksResp, nil
 }

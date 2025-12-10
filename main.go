@@ -109,14 +109,14 @@ func main() {
 		}
 
 		// Google Books API で書籍を検索
-		books, err := FetchBooksByQuery(searchQuery, maxResults, googleBooksAPIKey)
+		booksResp, err := FetchBooksByQuery(searchQuery, maxResults, googleBooksAPIKey)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
 		}
 
 		// 取得した書籍情報を JSON で返す
-		c.JSON(http.StatusOK, gin.H{"items": books})
+		c.JSON(http.StatusOK, booksResp)
 	})
 
 	// /recommends エンドポイント: ユーザーのマイライブラリをもとに
@@ -150,13 +150,38 @@ func main() {
 			// タイトルと著者で検索クエリを構築
 			// 形式: intitle:タイトル+inauthor:著者名
 			searchQuery := "intitle:" + rec.Title + "+inauthor:" + rec.Author
-			books, err := FetchBooksByQuery(searchQuery, "1", googleBooksAPIKey)
+			booksResp, err := FetchBooksByQuery(searchQuery, "1", googleBooksAPIKey)
 			if err != nil {
 				log.Printf("書籍情報取得エラー『%s』: %v", rec.Title, err)
 				continue
 			}
-			if len(books) > 0 {
-				results = append(results, books[0])
+			if booksResp != nil && len(booksResp.Items) > 0 {
+				volumeInfo := booksResp.Items[0].VolumeInfo
+				// 著者情報を抽出
+				authors := ""
+				if len(volumeInfo.Authors) > 0 {
+					authors = volumeInfo.Authors[0]
+				}
+				// ISBN を抽出
+				isbn := ""
+				for _, id := range volumeInfo.IndustryIdentifiers {
+					if id.Type == "ISBN_13" || id.Type == "ISBN_10" {
+						isbn = id.Identifier
+						break
+					}
+				}
+				// 書籍情報を構築
+				book := BookInfo{
+					Title:         volumeInfo.Title,
+					Author:        authors,
+					Thumbnail:     volumeInfo.ImageLinks.Thumbnail,
+					Publisher:     volumeInfo.Publisher,
+					PublishedDate: volumeInfo.PublishedDate,
+					Description:   volumeInfo.Description,
+					Pages:         fmt.Sprintf("%d", volumeInfo.PageCount),
+					ISBN:          isbn,
+				}
+				results = append(results, book)
 			}
 		}
 
