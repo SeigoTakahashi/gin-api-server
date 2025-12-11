@@ -76,7 +76,7 @@ type RecommendedBook struct {
 }
 
 // GetRecommendedBooks は Gemini API を使用してユーザーのマイライブラリに基づいて、
-// 5つのおすすめ書籍を取得する
+// 3つのおすすめ書籍を取得する
 func GetRecommendedBooks(ctx context.Context, library LibraryRequest, geminiKey string) ([]RecommendedBook, error) {
 	// ユーザーのマイライブラリ情報をプロンプトに組み込む
 	libraryInfo := "ユーザーのマイライブラリ:\n"
@@ -93,12 +93,10 @@ func GetRecommendedBooks(ctx context.Context, library LibraryRequest, geminiKey 
 
 	// Gemini API に送信するプロンプト
 	prompt := libraryInfo + `
-上記のマイライブラリに基づいて、ユーザーに合いそうなおすすめ書籍を「正確に5冊」提案してください。
+上記のマイライブラリに基づいて、ユーザーに合いそうなおすすめ書籍を「正確に3冊」提案してください。
 レスポンスは以下の JSON 形式でのみ返してください。他のテキストは一切含めないでください。
 
 [
-  {"title": "書籍タイトル", "author": "著者名"},
-  {"title": "書籍タイトル", "author": "著者名"},
   {"title": "書籍タイトル", "author": "著者名"},
   {"title": "書籍タイトル", "author": "著者名"},
   {"title": "書籍タイトル", "author": "著者名"}
@@ -106,7 +104,7 @@ func GetRecommendedBooks(ctx context.Context, library LibraryRequest, geminiKey 
 
 注意:
 1. JSON配列のみを返す
-2. 正確に5冊のみを返す
+2. 正確に3冊のみを返す
 3. マイライブラリに既に存在する書籍は避ける
 4. 実在する書籍と著者を提案する`
 
@@ -220,7 +218,7 @@ func GetReadingSummary(ctx context.Context, library LibraryRequest, geminiKey st
    - 新しいジャンルや著者の提案
    - 効率的な読書方法の提案
 
-返すときは、上記の構成を維持したテキストで、数字や記号は最小限にしてください。`
+返すときは、上記の構成を維持したテキストをフォーマットとして使用してください。`
 
 	// 共通の Gemini API 呼び出し関数を使用
 	responseText, err := callGeminiAPI(ctx, prompt, "gemini-2.5-flash", geminiKey)
