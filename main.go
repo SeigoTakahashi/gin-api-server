@@ -130,7 +130,7 @@ func main() {
 		}
 
 		if len(req.Records) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "マイライブラリが空です"})
+			c.JSON(http.StatusOK, gin.H{"message": "マイライブラリに書籍が登録されていません。書籍を追加してください。", "items": []BookInfo{}})
 			return
 		}
 
@@ -200,7 +200,7 @@ func main() {
 		}
 
 		if len(req.Records) == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "マイライブラリが空です"})
+			c.JSON(http.StatusOK, gin.H{"message": "マイライブラリに書籍が登録されていません。書籍を追加してください。", "summary": ""})
 			return
 		}
 
