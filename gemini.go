@@ -11,6 +11,48 @@ import (
 	"google.golang.org/genai"
 )
 
+// Gemini API設定定数
+const (
+	// 使用する Gemini モデル
+	GeminiModel = "gemini-2.5-flash"
+	// おすすめ書籍取得のプロンプトテンプレート
+	recommendationsPromptTemplate = `
+上記のマイライブラリに基づいて、ユーザーに合いそうなおすすめ書籍を「正確に3冊」提案してください。
+レスポンスは以下の JSON 形式でのみ返してください。他のテキストは一切含めないでください。
+
+[
+  {"title": "書籍タイトル", "author": "著者名"},
+  {"title": "書籍タイトル", "author": "著者名"},
+  {"title": "書籍タイトル", "author": "著者名"}
+]
+
+注意:
+1. JSON配列のみを返す
+2. 正確に3冊のみを返す
+3. マイライブラリに既に存在する書籍は避ける
+4. 実在する書籍と著者を提案する`
+	// 読書傾向要約のプロンプトテンプレート
+	summaryPromptTemplate = `
+上記のマイライブラリに基づいて、以下の内容を日本語で分析して簡潔にまとめてください。
+各番号の各項目に対して、1文程度の箇条書きで簡潔に回答してください。
+返すテキストはそのまま表示・コピペできるようにしてください。段落は改行で区切ってください。
+
+1. 【読書傾向の分析】
+   - ユーザーの主な読書ジャンル
+   - 好みの著者や作風の特徴
+   - 読書スタイル（多読傾向、じっくり読み傾向など）
+
+2. 【読書の強み】
+   - 現在の読書習慣で良い点
+
+3. 【行動提案】
+   - 読書習慣の改善提案
+   - 新しいジャンルや著者の提案
+   - 効率的な読書方法の提案
+
+返すときは、上記の構成を維持したテキストをフォーマットとして使用してください。`
+)
+
 // callGeminiAPI は Gemini API に共通のプロンプトで問い合わせ、テキストレスポンスを返す
 // ctx: コンテキスト
 // prompt: Gemini に送信するプロンプト
@@ -92,24 +134,10 @@ func GetRecommendedBooks(ctx context.Context, library LibraryRequest, geminiKey 
 	}
 
 	// Gemini API に送信するプロンプト
-	prompt := libraryInfo + `
-上記のマイライブラリに基づいて、ユーザーに合いそうなおすすめ書籍を「正確に3冊」提案してください。
-レスポンスは以下の JSON 形式でのみ返してください。他のテキストは一切含めないでください。
-
-[
-  {"title": "書籍タイトル", "author": "著者名"},
-  {"title": "書籍タイトル", "author": "著者名"},
-  {"title": "書籍タイトル", "author": "著者名"}
-]
-
-注意:
-1. JSON配列のみを返す
-2. 正確に3冊のみを返す
-3. マイライブラリに既に存在する書籍は避ける
-4. 実在する書籍と著者を提案する`
+	prompt := libraryInfo + recommendationsPromptTemplate
 
 	// 共通の Gemini API 呼び出し関数を使用
-	responseText, err := callGeminiAPI(ctx, prompt, "gemini-2.5-flash", geminiKey)
+	responseText, err := callGeminiAPI(ctx, prompt, GeminiModel, geminiKey)
 	if err != nil {
 		return nil, err
 	}
@@ -200,28 +228,10 @@ func GetReadingSummary(ctx context.Context, library LibraryRequest, geminiKey st
 	}
 
 	// Gemini API に送信するプロンプト
-	prompt := libraryInfo + `
-上記のマイライブラリに基づいて、以下の内容を日本語で分析して簡潔にまとめてください。
-各番号の各項目に対して、1文程度の箇条書きで簡潔に回答してください。
-返すテキストはそのまま表示・コピペできるようにしてください。段落は改行で区切ってください。
-
-1. 【読書傾向の分析】
-   - ユーザーの主な読書ジャンル
-   - 好みの著者や作風の特徴
-   - 読書スタイル（多読傾向、じっくり読み傾向など）
-
-2. 【読書の強み】
-   - 現在の読書習慣で良い点
-
-3. 【行動提案】
-   - 読書習慣の改善提案
-   - 新しいジャンルや著者の提案
-   - 効率的な読書方法の提案
-
-返すときは、上記の構成を維持したテキストをフォーマットとして使用してください。`
+	prompt := libraryInfo + summaryPromptTemplate
 
 	// 共通の Gemini API 呼び出し関数を使用
-	responseText, err := callGeminiAPI(ctx, prompt, "gemini-2.5-flash", geminiKey)
+	responseText, err := callGeminiAPI(ctx, prompt, GeminiModel, geminiKey)
 	if err != nil {
 		return "", err
 	}

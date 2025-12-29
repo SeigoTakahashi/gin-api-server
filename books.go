@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"time"
 )
 
 // BookInfo はクライアントに返却される書籍情報を表す構造体
@@ -48,7 +47,8 @@ type GoogleBooksResponse struct {
 // searchQuery: 検索クエリ（例: "intitle:こころ+inauthor:夏目漱石"）
 // maxResults: 取得する書籍数の上限
 // apiKey: Google Books API キー
-func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string) (*GoogleBooksResponse, error) {
+// httpClient: 共有の http.Client インスタンス
+func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string, httpClient *http.Client) (*GoogleBooksResponse, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("APIキーが設定されていません")
 	}
@@ -59,8 +59,7 @@ func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string) (*G
 	// Google Books API の URL を構築
 	target := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=%s&key=%s", q, maxResults, key)
 
-	// HTTP クライアントを作成（タイムアウト: 10秒）
-	client := &http.Client{Timeout: 10 * time.Second}
+	// HTTP リクエストを作成
 	req, err := http.NewRequest("GET", target, nil)
 	if err != nil {
 		log.Printf("リクエスト作成エラー: %v", err)
@@ -68,7 +67,7 @@ func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string) (*G
 	}
 
 	// API にリクエストを送信
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		log.Printf("API呼び出しエラー: %v", err)
 		return nil, fmt.Errorf("外部APIの呼び出しに失敗しました")

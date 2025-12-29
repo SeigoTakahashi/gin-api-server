@@ -47,26 +47,43 @@ func Initialize() {
 	}
 }
 
-// APIキーを保持するグローバル変数
-var (
-	googleBooksAPIKey string
-	geminiAPIKey      string
+// アプリケーション設定定数
+const (
+	// デフォルトのmaxResults値（Google Books API）
+	DefaultMaxResults = "20"
+	// HTTPクライアントのタイムアウト
+	DefaultHTTPTimeout = 10 * time.Second
+	// CORS MaxAge設定
+	CORSMaxAge = 12 * time.Hour
+	// ローカル開発用のデフォルトポート
+	DefaultPort = "8080"
 )
 
-// initializeAPIKeys はアプリケーション起動時に全ての API キーを読み込む
-func initializeAPIKeys() error {
-	googleBooksAPIKey = loadAPIKeyFromEnv("GOOGLE_BOOKS_API_KEY")
+// AppConfig はアプリケーションの設定を管理する構造体
+type AppConfig struct {
+	GoogleBooksAPIKey string
+	GeminiAPIKey      string
+	HTTPClient        *http.Client
+}
+
+// NewAppConfig はアプリケーション起動時に全ての API キーを読み込んで設定を初期化する
+func NewAppConfig() (*AppConfig, error) {
+	googleBooksAPIKey := loadAPIKeyFromEnv("GOOGLE_BOOKS_API_KEY")
 	if googleBooksAPIKey == "" {
-		return fmt.Errorf("google Books API キーが設定されていません")
+		return nil, fmt.Errorf("google Books API キーが設定されていません")
 	}
 
-	geminiAPIKey = loadAPIKeyFromEnv("GEMINI_API_KEY")
+	geminiAPIKey := loadAPIKeyFromEnv("GEMINI_API_KEY")
 	if geminiAPIKey == "" {
-		return fmt.Errorf("gemini API キーが設定されていません")
+		return nil, fmt.Errorf("gemini API キーが設定されていません")
 	}
 
 	log.Println("API キーの読み込みに成功しました")
-	return nil
+	return &AppConfig{
+		GoogleBooksAPIKey: googleBooksAPIKey,
+		HTTPClient:        &http.Client{Timeout: DefaultHTTPTimeout},
+		GeminiAPIKey:      geminiAPIKey,
+	}, nil
 }
 
 func main() {
@@ -74,8 +91,9 @@ func main() {
 	// ローカル開発は .env を、本番環境（Render）は実際の環境変数を使用
 	Initialize()
 
-	// API キーを初期化
-	if err := initializeAPIKeys(); err != nil {
+	// アプリケーション設定を初期化
+	cfg, err := NewAppConfig()
+	if err != nil {
 		log.Fatalf("API キーの初期化に失敗しました: %v", err)
 	}
 
@@ -89,7 +107,7 @@ func main() {
 		AllowHeaders:     []string{"Origin", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+		MaxAge:           CORSMaxAge,
 	}))
 
 	// /books エンドポイント: searchQuery と maxResults をクエリパラメータで受け取り、
@@ -105,11 +123,11 @@ func main() {
 		}
 
 		if maxResults == "" {
-			maxResults = "20" // デフォルト値
+			maxResults = DefaultMaxResults
 		}
 
 		// Google Books API で書籍を検索
-		booksResp, err := FetchBooksByQuery(searchQuery, maxResults, googleBooksAPIKey)
+		booksResp, err := FetchBooksByQuery(searchQuery, maxResults, cfg.GoogleBooksAPIKey, cfg.HTTPClient)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 			return
@@ -137,7 +155,7 @@ func main() {
 		// Gemini API を使用して、ユーザーの読書傾向に基づくおすすめ書籍を取得
 		ctx := context.Background()
 
-		recommendations, err := GetRecommendedBooks(ctx, req, geminiAPIKey)
+		recommendations, err := GetRecommendedBooks(ctx, req, cfg.GeminiAPIKey)
 		if err != nil {
 			log.Printf("おすすめ書籍取得エラー: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -150,7 +168,7 @@ func main() {
 			// タイトルと著者で検索クエリを構築
 			// 形式: intitle:タイトル+inauthor:著者名
 			searchQuery := "intitle:" + rec.Title + "+inauthor:" + rec.Author
-			booksResp, err := FetchBooksByQuery(searchQuery, "1", googleBooksAPIKey)
+			booksResp, err := FetchBooksByQuery(searchQuery, "1", cfg.GoogleBooksAPIKey, cfg.HTTPClient)
 			if err != nil {
 				log.Printf("書籍情報取得エラー『%s』: %v", rec.Title, err)
 				continue
@@ -206,7 +224,7 @@ func main() {
 
 		// Gemini API を使用して読書傾向を分析
 		ctx := context.Background()
-		summary, err := GetReadingSummary(ctx, req, geminiAPIKey)
+		summary, err := GetReadingSummary(ctx, req, cfg.GeminiAPIKey)
 		if err != nil {
 			log.Printf("読書傾向要約生成エラー: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -218,10 +236,10 @@ func main() {
 	})
 
 	// サーバーの起動
-	// PORT 環境変数が設定されていればそれを使用、なければデフォルト 8080 ポートで起動
+	// PORT 環境変数が設定されていればそれを使用、なければデフォルトポートで起動
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080" // ローカル開発用デフォルトポート
+		port = DefaultPort
 	}
 	router.Run(":" + port)
 }
