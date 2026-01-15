@@ -50,7 +50,7 @@ func Initialize() {
 // アプリケーション設定定数
 const (
 	// デフォルトのmaxResults値（Google Books API）
-	DefaultMaxResults = "20"
+	DefaultMaxResults = "40"
 	// HTTPクライアントのタイムアウト
 	DefaultHTTPTimeout = 10 * time.Second
 	// CORS MaxAge設定
