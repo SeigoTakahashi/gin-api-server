@@ -63,6 +63,7 @@ const (
 type AppConfig struct {
 	GoogleBooksAPIKey string
 	GeminiAPIKey      string
+	IMGBB_API_KEY     string
 	HTTPClient        *http.Client
 }
 
@@ -78,11 +79,17 @@ func NewAppConfig() (*AppConfig, error) {
 		return nil, fmt.Errorf("gemini API キーが設定されていません")
 	}
 
+	imgBBAPIKey := loadAPIKeyFromEnv("IMGBB_API_KEY")
+	if imgBBAPIKey == "" {
+		return nil, fmt.Errorf("imgBB API キーが設定されていません")
+	}
+
 	log.Println("API キーの読み込みに成功しました")
 	return &AppConfig{
 		GoogleBooksAPIKey: googleBooksAPIKey,
 		HTTPClient:        &http.Client{Timeout: DefaultHTTPTimeout},
 		GeminiAPIKey:      geminiAPIKey,
+		IMGBB_API_KEY:     imgBBAPIKey,
 	}, nil
 }
 
@@ -233,6 +240,29 @@ func main() {
 
 		// テキスト形式でそのままコピペできるように返す
 		c.JSON(http.StatusOK, gin.H{"summary": summary})
+	})
+
+	// /upload エンドポイント: 画像ファイルを受け取り ImgBB にアップロードし、URL を返す
+	router.POST("/upload", func(c *gin.Context) {
+		// フォームデータの取得
+		file, header, err := c.Request.FormFile("image")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ファイルの取得に失敗しました"})
+			return
+		}
+		defer file.Close()
+
+		// image.go の関数を呼び出してアップロードを実行
+		url, err := uploadToImgBB(file, header.Filename, cfg.IMGBB_API_KEY)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "アップロード中にエラーが発生しました"})
+			return
+		}
+
+		// 成功レスポンス
+		c.JSON(http.StatusOK, gin.H{
+			"url": url,
+		})
 	})
 
 	// サーバーの起動
