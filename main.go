@@ -109,7 +109,7 @@ func main() {
 
 	// CORS設定を追加
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "https://reading-support.web.app"}, // 許可するオリジン
+		AllowOrigins:     []string{"http://localhost:5173", "https://reading-support.web.app", "https://reading-support-myself.web.app"}, // 許可するオリジン
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE"},
 		AllowHeaders:     []string{"Origin", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
