@@ -54,7 +54,11 @@ func uploadToImgBB(file io.Reader, filename string, apiKey string, client *http.
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf("ImgBB API が HTTP %d を返しました", resp.StatusCode)
+		errorBody, err := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		if err != nil {
+			return "", fmt.Errorf("ImgBB API が HTTP %d を返しました (エラーレスポンスの読み込みに失敗: %w)", resp.StatusCode, err)
+		}
+		return "", fmt.Errorf("ImgBB API が HTTP %d を返しました (レスポンス: %q)", resp.StatusCode, errorBody)
 	}
 
 	// レスポンス解析

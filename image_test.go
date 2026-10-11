@@ -59,13 +59,17 @@ func TestUploadToImgBB(t *testing.T) {
 
 	t.Run("rejects non-success HTTP status", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "upstream failure", http.StatusServiceUnavailable)
+			http.Error(w, "upstream failure", http.StatusBadRequest)
 		}))
 		defer server.Close()
 
 		client := &http.Client{Transport: rewriteImgBBURL(server.URL)}
-		if _, err := uploadToImgBB(strings.NewReader("image data"), "cover.jpg", "test-key", client); err == nil {
+		_, err := uploadToImgBB(strings.NewReader("image data"), "cover.jpg", "test-key", client)
+		if err == nil {
 			t.Fatal("uploadToImgBB() error = nil, want error")
+		}
+		if !strings.Contains(err.Error(), "upstream failure") {
+			t.Errorf("uploadToImgBB() error = %q, want upstream response body", err)
 		}
 	})
 }
