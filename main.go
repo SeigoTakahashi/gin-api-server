@@ -253,9 +253,10 @@ func main() {
 		defer file.Close()
 
 		// image.go の関数を呼び出してアップロードを実行
-		url, err := uploadToImgBB(file, header.Filename, cfg.IMGBB_API_KEY)
+		url, err := uploadToImgBB(file, header.Filename, cfg.IMGBB_API_KEY, cfg.HTTPClient)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "アップロード中にエラーが発生しました"})
+			log.Printf("ImgBBへの画像アップロードエラー: %v", err)
+			c.JSON(http.StatusBadGateway, gin.H{"error": "ImgBBへの画像アップロードに失敗しました"})
 			return
 		}
 

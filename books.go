@@ -7,7 +7,10 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"time"
 )
+
+const googleBooksMaxAttempts = 3
 
 // BookInfo はクライアントに返却される書籍情報を表す構造体
 type BookInfo struct {
@@ -66,13 +69,30 @@ func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string, htt
 		return nil, fmt.Errorf("リクエスト作成に失敗しました")
 	}
 
-	// API にリクエストを送信
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		log.Printf("API呼び出しエラー: %v", err)
-		return nil, fmt.Errorf("外部APIの呼び出しに失敗しました")
+	// Google Books API の一時的な 503 に備え、短い間隔で最大 3 回試行する。
+	var resp *http.Response
+	for attempt := 1; attempt <= googleBooksMaxAttempts; attempt++ {
+		resp, err = httpClient.Do(req)
+		if err != nil {
+			log.Printf("API呼び出しエラー: %v", err)
+			return nil, fmt.Errorf("外部APIの呼び出しに失敗しました")
+		}
+		if resp.StatusCode != http.StatusServiceUnavailable || attempt == googleBooksMaxAttempts {
+			break
+		}
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		time.Sleep(time.Duration(attempt) * 250 * time.Millisecond)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		log.Printf("Google Books API が HTTP %d を返しました", resp.StatusCode)
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			return nil, fmt.Errorf("Google Books API が一時的に利用できません (HTTP %d)。時間をおいて再試行してください", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("Google Books API が HTTP %d を返しました", resp.StatusCode)
+	}
 
 	// レスポンスボディを読み込む
 	body, err := io.ReadAll(resp.Body)
