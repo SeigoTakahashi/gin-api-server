@@ -57,7 +57,7 @@ func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string, htt
 	}
 
 	// 検索クエリと API キーを URL エンコード
-	q := url.QueryEscape(searchQuery)
+	q := searchQuery
 	key := url.QueryEscape(apiKey)
 	// Google Books API の URL を構築
 	target := fmt.Sprintf("https://www.googleapis.com/books/v1/volumes?q=%s&maxResults=%s&key=%s", q, maxResults, key)
