@@ -101,6 +101,8 @@ func FetchBooksByQuery(searchQuery string, maxResults string, apiKey string, htt
 		return nil, fmt.Errorf("レスポンスの読み込みに失敗しました")
 	}
 
+	log.Printf("Google Books API Raw Response: %s", string(body))
+
 	// JSON レスポンスをパース
 	var booksResp GoogleBooksResponse
 	if err := json.Unmarshal(body, &booksResp); err != nil {
