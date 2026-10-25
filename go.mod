@@ -1,6 +1,6 @@
 module gin-api-server
 
-go 1.24.2
+go 1.27.3
 
 require (
 	cloud.google.com/go v0.116.0 // indirect

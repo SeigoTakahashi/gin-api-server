@@ -31,7 +31,7 @@ Go（Gin）を使用し、書籍検索・AI レコメンド・画像アップロ
 
 ## 🛠 技術スタック
 
-* **Language**: Go 1.21
+* **Language**: Go 1.27.3 以降
 * **Framework**: Gin Web Framework
 * **API Integration**:
 
